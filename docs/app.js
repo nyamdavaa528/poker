@@ -1,14 +1,7 @@
-socket.on("connect", () => {
-  console.log("Socket connected:", socket.id);
-});
+socket.on("connect", () => console.log("socket connected", socket.id));
+socket.on("connect_error", (e) => console.log("connect_error", e?.message || e));
+socket.on("disconnect", (r) => console.log("disconnected", r));
 
-socket.on("connect_error", (err) => {
-  console.log("Socket connect_error:", err?.message || err);
-});
-
-socket.on("disconnect", (reason) => {
-  console.log("Socket disconnected:", reason);
-});
 // docs/app.js
 const socket = io(window.SOCKET_URL);
 
@@ -423,4 +416,5 @@ function renderGame(st) {
 
 // Start
 resetToEntry();
+
 
