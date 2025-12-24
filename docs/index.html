@@ -7,6 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>Poker Table Ledger</title>
+
     <style>
       :root {
         --bg: #0b0f14;
@@ -47,12 +48,12 @@
       .wrap {
         max-width: 980px;
         margin: 0 auto;
-        padding: 16px 14px 150px; /* bottom bar space */
+        padding: 16px 14px 150px;
       }
 
       .topbar {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 10px;
         margin-bottom: 14px;
@@ -112,7 +113,7 @@
       }
       @media (min-width: 860px) {
         .grid {
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1.15fr 0.85fr;
         }
       }
 
@@ -185,6 +186,7 @@
         margin: 12px 0;
       }
 
+      /* Lobby: show ONLY occupied players */
       .seatList {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -217,6 +219,7 @@
         color: var(--muted);
         margin-top: 2px;
       }
+
       .tag {
         display: inline-block;
         padding: 2px 8px;
@@ -237,12 +240,12 @@
         background: rgba(98, 160, 234, 0.1);
       }
 
-      /* --- TABLE (portrait, bigger) --- */
+      /* --- TABLE --- */
       .tableWrap {
         position: relative;
         width: 100%;
-        aspect-ratio: 10/16; /* босоо */
-        max-height: 72vh; /* утсан дээр том */
+        aspect-ratio: 16/11;
+        max-height: 72vh;
         border-radius: 26px;
         border: 1px solid var(--line);
         background: radial-gradient(
@@ -272,6 +275,7 @@
           ),
           rgba(0, 0, 0, 0.18);
       }
+
       .centerInfo {
         position: absolute;
         left: 50%;
@@ -282,15 +286,18 @@
         border-radius: 16px;
         border: 1px solid rgba(255, 255, 255, 0.12);
         background: rgba(0, 0, 0, 0.22);
-        min-width: 200px;
+        min-width: 220px;
       }
       .centerInfo .pot {
         font-size: 18px;
         font-weight: 950;
       }
       .centerInfo .meta {
-        display: none;
-      } /* pot/hand/base байхгүй, зөвхөн current */
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
 
       .turnBanner {
         margin-top: 10px;
@@ -301,36 +308,35 @@
         font-weight: 950;
       }
 
-      /* Seat: compact (only name + seat# + badges) */
+      /* Seats: rendered dynamically (only occupied) */
+      #seatLayer {
+        position: absolute;
+        inset: 0;
+      }
+
       .seat {
         position: absolute;
-        width: 44%;
-        max-width: 170px;
-        min-width: 98px;
+        width: min(220px, 44%);
+        min-width: 140px;
         border-radius: 16px;
         border: 1px solid var(--line);
-        background: rgba(0, 0, 0, 0.22);
-        padding: 8px 10px;
+        background: rgba(0, 0, 0, 0.26);
+        padding: 10px 10px;
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
         transform: translate(-50%, -50%);
       }
+
       @media (max-width: 420px) {
         .seat {
           width: 48%;
-          min-width: 92px;
-          padding: 7px 9px;
-        }
-        .seat .name {
-          font-size: 12px;
-        }
-        .centerInfo {
-          min-width: 180px;
+          min-width: 132px;
+          padding: 9px 9px;
         }
       }
 
       .seat.me {
         border-color: rgba(98, 160, 234, 0.45);
-        background: rgba(98, 160, 234, 0.1);
+        background: rgba(98, 160, 234, 0.12);
       }
       .seat.turn {
         border-color: rgba(51, 209, 122, 0.85);
@@ -350,6 +356,16 @@
         gap: 8px;
         flex-wrap: wrap;
         line-height: 1.15;
+      }
+      .seat .betLine {
+        margin-top: 6px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.85);
+      }
+      .seat .betLine .mut {
+        color: var(--muted);
       }
 
       .badge {
@@ -372,48 +388,6 @@
       .badge.turn {
         border-color: rgba(51, 209, 122, 0.45);
         background: rgba(51, 209, 122, 0.12);
-      }
-
-      /* Portrait seat positions (10) */
-      .p0 {
-        left: 50%;
-        top: 6%;
-      }
-      .p1 {
-        left: 76%;
-        top: 14%;
-      }
-      .p2 {
-        left: 90%;
-        top: 28%;
-      }
-      .p3 {
-        left: 90%;
-        top: 46%;
-      }
-      .p4 {
-        left: 76%;
-        top: 62%;
-      }
-      .p5 {
-        left: 50%;
-        top: 76%;
-      }
-      .p6 {
-        left: 24%;
-        top: 62%;
-      }
-      .p7 {
-        left: 10%;
-        top: 46%;
-      }
-      .p8 {
-        left: 10%;
-        top: 28%;
-      }
-      .p9 {
-        left: 24%;
-        top: 14%;
       }
 
       .bottomBar {
@@ -459,13 +433,14 @@
       }
     </style>
   </head>
+
   <body>
     <div class="wrap">
       <div class="topbar">
         <div class="brand">
           <h1>Poker Table Ledger</h1>
           <div class="sub">
-            10 суудал — жинхэнэ хөзөр, зөвхөн мөнгөний тооцоо
+            Жинхэнэ хөзөр — зөвхөн мөнгөний тооцоо (call / raise / fold)
           </div>
         </div>
         <div class="pills">

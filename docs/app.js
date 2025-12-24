@@ -56,7 +56,7 @@ let myPlayerId = null;
 // State
 let state = null;
 
-// Helpers
+// ---------- Helpers ----------
 function show(el) {
   el.classList.remove("hide");
 }
@@ -100,6 +100,23 @@ function allReady(st) {
   const occ = st.seats.filter((s) => s.occupied);
   return occ.length >= 2 && occ.every((s) => s.ready);
 }
+function getMyContrib(st) {
+  if (!st?.hand) return 0;
+  return st.hand.contributed?.[mySeatIndex] ?? 0;
+}
+function getCallNeed(st) {
+  if (!st?.hand) return 0;
+  const currentBet = st.hand.currentBet ?? 0;
+  const myContrib = getMyContrib(st);
+  return Math.max(0, currentBet - myContrib);
+}
+function parseMoneyInputToNumber(inputEl) {
+  const digits = inputEl.value.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const v = Number(digits);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  return v;
+}
 
 // Raise input comma formatting
 raiseInput.addEventListener("input", () => {
@@ -112,7 +129,7 @@ raiseInput.addEventListener("input", () => {
   raiseInput.value = Number(v).toLocaleString("en-US");
 });
 
-// Actions
+// ---------- Actions ----------
 document.getElementById("createBtn").onclick = () => {
   clearAllErr();
   socket.emit("createTable", {
@@ -120,6 +137,7 @@ document.getElementById("createBtn").onclick = () => {
     name: nameEl.value.trim(),
   });
 };
+
 document.getElementById("joinBtn").onclick = () => {
   clearAllErr();
   socket.emit("joinTable", {
@@ -132,6 +150,7 @@ readyBtn.onclick = () => {
   clearAllErr();
   socket.emit("toggleReady");
 };
+
 leaveBtn.onclick = () => {
   socket.emit("leave");
   resetToEntry();
@@ -155,21 +174,44 @@ btnCall.onclick = () => {
   clearAllErr();
   socket.emit("call");
 };
+
 btnFold.onclick = () => {
   clearAllErr();
   socket.emit("fold");
 };
 
+// ---- Raise (BUGFIXED) ----
+// - empty input -> block
+// - invalid number -> block
+// - <= currentBet -> block with clear msg
 btnRaise.onclick = () => {
   clearAllErr();
-  const digits = raiseInput.value.replace(/[^\d]/g, "");
-  const newBet = Number(digits);
+  if (!state?.hand) return;
+
+  const newBet = parseMoneyInputToNumber(raiseInput);
+  if (newBet == null) {
+    setErr(gameErr, "Raise-ийн дүнгээ зөв оруулна уу (тоо).");
+    return;
+  }
+
+  const currentBet = state.hand.currentBet ?? 0;
+  if (newBet <= currentBet) {
+    setErr(gameErr, `Raise нь Current (${fmt(currentBet)})-аас их байх ёстой.`);
+    return;
+  }
+
   socket.emit("raise", { newBet });
   raiseInput.value = ""; // clear after raise
 };
 
 function quickRaise(amount) {
   clearAllErr();
+  if (!state?.hand) return;
+  const currentBet = state.hand.currentBet ?? 0;
+  if (amount <= currentBet) {
+    setErr(gameErr, `Raise нь Current (${fmt(currentBet)})-аас их байх ёстой.`);
+    return;
+  }
   socket.emit("raise", { newBet: amount });
   raiseInput.value = "";
 }
@@ -198,7 +240,7 @@ backToLobbyBtn.onclick = () => {
   renderScreens(state, { forceLobby: true });
 };
 
-// Socket events
+// ---------- Socket events ----------
 socket.on("me", ({ seatIndex, playerId }) => {
   mySeatIndex = seatIndex;
   myPlayerId = playerId;
@@ -240,7 +282,7 @@ socket.on("state", (st) => {
   renderScreens(st);
 });
 
-// Rendering
+// ---------- Rendering ----------
 function resetToEntry() {
   state = null;
   mySeatIndex = null;
@@ -280,15 +322,17 @@ function renderScreens(st, opts = {}) {
 function renderLobby(st) {
   lobbySeats.innerHTML = "";
 
-  for (const s of st.seats) {
-    const div = document.createElement("div");
-    div.className = "seatMini";
+  // ONLY occupied users (no empty)
+  const occ = st.seats.filter((s) => s.occupied);
 
-    if (!s.occupied) {
-      div.innerHTML = `<div class="n">Seat ${
-        s.seat + 1
-      }</div><div class="s">(empty)</div>`;
-    } else {
+  if (!occ.length) {
+    lobbySeats.innerHTML =
+      '<div class="muted">Одоогоор тоглогч алга байна.</div>';
+  } else {
+    for (const s of occ) {
+      const div = document.createElement("div");
+      div.className = "seatMini";
+
       const tags = [];
       if (s.seat === st.hostSeatIndex)
         tags.push(`<span class="tag host">HOST</span>`);
@@ -299,8 +343,8 @@ function renderLobby(st) {
         <div class="n">${esc(s.name)} ${tags.join("")}</div>
         <div class="s">Seat ${s.seat + 1}</div>
       `;
+      lobbySeats.appendChild(div);
     }
-    lobbySeats.appendChild(div);
   }
 
   const canStart = isHost(st) && allReady(st);
@@ -316,28 +360,37 @@ function renderLobby(st) {
 function renderGame(st) {
   const hand = st.hand;
 
-  // center: only CURRENT
-  potText.textContent = `Current: ${fmt(hand.currentBet)}`;
-  handMeta.textContent = "";
+  // Center info
+  potText.textContent = `Current: ${fmt(hand.currentBet ?? 0)}`;
+  const aliveCount = st.seats.filter((s) => s.occupied).length;
+  const pot = hand.pot ?? 0;
+  handMeta.textContent = `Pot: ${fmt(pot)} | Players: ${aliveCount}`;
 
   // Winner button only for host
   if (isHost(st)) show(btnWin);
   else hide(btnWin);
 
-  // Seats (compact)
+  // Seats: ONLY occupied, positioned dynamically around ellipse
   seatLayer.innerHTML = "";
-  for (const s of st.seats) {
-    const seatIndex = s.seat;
-    const seatDiv = document.createElement("div");
-    seatDiv.className = `seat p${seatIndex}`;
+  const occ = st.seats.filter((s) => s.occupied);
 
-    if (!s.occupied) {
-      seatDiv.innerHTML = `<div class="name">Empty <span class="badge">${
-        seatIndex + 1
-      }</span></div>`;
-      seatLayer.appendChild(seatDiv);
-      continue;
-    }
+  const n = occ.length;
+  const radiusX = 42; // %
+  const radiusY = 34; // %
+  const startDeg = -90; // top
+
+  for (let k = 0; k < n; k++) {
+    const s = occ[k];
+    const seatIndex = s.seat;
+
+    const angle = ((startDeg + (360 * k) / n) * Math.PI) / 180;
+    const left = 50 + radiusX * Math.cos(angle);
+    const top = 50 + radiusY * Math.sin(angle);
+
+    const seatDiv = document.createElement("div");
+    seatDiv.className = "seat";
+    seatDiv.style.left = `${left}%`;
+    seatDiv.style.top = `${top}%`;
 
     const isDealer = hand.dealerSeat === seatIndex;
     const isTurn = hand.turnSeat === seatIndex;
@@ -353,9 +406,17 @@ function renderGame(st) {
     if (isDealer) badges.push(`<span class="badge dealer">D</span>`);
     if (isTurn) badges.push(`<span class="badge turn">T</span>`);
 
+    // Per-player bet (this hand)
+    const contributed = hand.contributed?.[seatIndex] ?? 0;
+
     seatDiv.innerHTML = `
       <div class="name">${esc(s.name)} ${badges.join("")}</div>
+      <div class="betLine">
+        <span class="mut">Bet</span>
+        <span>${fmt(contributed)}</span>
+      </div>
     `;
+
     seatLayer.appendChild(seatDiv);
   }
 
