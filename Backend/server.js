@@ -8,7 +8,6 @@ app.get("/health", (req, res) => res.status(200).send("ok"));
 const server = http.createServer(app);
 
 // IMPORTANT: set ALLOWED_ORIGIN in Render env to your GitHub Pages origin.
-// Example: https://yourname.github.io
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
 
 const io = new Server(server, {
@@ -215,10 +214,30 @@ function applyRaise(table, seatIndex, newBet) {
   });
 }
 
+/**
+ * FIX: If a player folds with 0 contributed, auto-pay 200 (baseBet) then fold.
+ * Your request: "0 дээр fold дарвал автоматаар 200 төгрөгөөр fold"
+ */
 function applyFold(table, seatIndex) {
   const hand = table.hand;
   const seat = table.seats[seatIndex];
   if (!hand || !seat) return;
+
+  const alreadyPaid = hand.contributed[seatIndex] || 0;
+
+  if (alreadyPaid === 0) {
+    const autoPay = Number(hand.baseBet) || 200; // default 200
+    hand.contributed[seatIndex] += autoPay;
+    hand.pot += autoPay;
+
+    hand.history.push({
+      ts: Date.now(),
+      type: "auto-pay",
+      by: seat.name,
+      amount: autoPay,
+      note: "Auto pay on fold (0 -> 200)",
+    });
+  }
 
   hand.inHand[seatIndex] = false;
   hand.history.push({ ts: Date.now(), type: "fold", by: seat.name });
@@ -456,7 +475,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // WINNER: host only, choose winner seat
   socket.on("declareWinner", ({ winnerSeat }) => {
     try {
       const { tableId } = socket.data;
@@ -511,7 +529,6 @@ io.on("connection", (socket) => {
       seatIndex !== undefined &&
       table.seats[seatIndex]?.socketId === socket.id
     ) {
-      // If active hand and in-hand, fold them
       if (table.hand && table.hand.inHand?.[seatIndex]) {
         table.hand.inHand[seatIndex] = false;
         table.hand.history.push({
