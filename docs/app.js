@@ -7,9 +7,6 @@ socket.on("connect", () => console.log("socket connected", socket.id));
 socket.on("connect_error", (e) => console.log("connect_error", e?.message || e));
 socket.on("disconnect", (r) => console.log("disconnected", r));
 
-// docs/app.js
-const socket = io(window.SOCKET_URL);
-
 // Screens
 const screenEntry = document.getElementById("screenEntry");
 const screenLobby = document.getElementById("screenLobby");
@@ -421,6 +418,7 @@ function renderGame(st) {
 
 // Start
 resetToEntry();
+
 
 
 
