@@ -4,7 +4,7 @@ const socket = io(window.SOCKET_URL, { transports: ["websocket", "polling"] });
 // Screens
 const screenEntry = document.getElementById("screenEntry");
 const screenLobby = document.getElementById("screenLobby");
-const screenGameGrid = document.getElementById("screenGameGrid");
+const screenGame = document.getElementById("screenGame");
 const bottomBar = document.getElementById("bottomBar");
 
 // Pills
@@ -56,7 +56,7 @@ let myPlayerId = null;
 // State
 let state = null;
 
-// ---------- Helpers ----------
+// Helpers
 function show(el) {
   el.classList.remove("hide");
 }
@@ -100,16 +100,6 @@ function allReady(st) {
   const occ = st.seats.filter((s) => s.occupied);
   return occ.length >= 2 && occ.every((s) => s.ready);
 }
-function getMyContrib(st) {
-  if (!st?.hand) return 0;
-  return st.hand.contributed?.[mySeatIndex] ?? 0;
-}
-function getCallNeed(st) {
-  if (!st?.hand) return 0;
-  const currentBet = st.hand.currentBet ?? 0;
-  const myContrib = getMyContrib(st);
-  return Math.max(0, currentBet - myContrib);
-}
 function parseMoneyInputToNumber(inputEl) {
   const digits = inputEl.value.replace(/[^\d]/g, "");
   if (!digits) return null;
@@ -129,7 +119,7 @@ raiseInput.addEventListener("input", () => {
   raiseInput.value = Number(v).toLocaleString("en-US");
 });
 
-// ---------- Actions ----------
+// Actions
 document.getElementById("createBtn").onclick = () => {
   clearAllErr();
   socket.emit("createTable", {
@@ -165,10 +155,13 @@ lobbySettleBtn.onclick = () => {
   clearAllErr();
   socket.emit("settlement");
 };
-settleBtn.onclick = () => {
-  clearAllErr();
-  socket.emit("settlement");
-};
+
+if (settleBtn) {
+  settleBtn.onclick = () => {
+    clearAllErr();
+    socket.emit("settlement");
+  };
+}
 
 btnCall.onclick = () => {
   clearAllErr();
@@ -177,13 +170,11 @@ btnCall.onclick = () => {
 
 btnFold.onclick = () => {
   clearAllErr();
+  // NOTE: server side will auto-pay 200 if contributed==0 then fold
   socket.emit("fold");
 };
 
-// ---- Raise (BUGFIXED) ----
-// - empty input -> block
-// - invalid number -> block
-// - <= currentBet -> block with clear msg
+// Raise (client-side guard)
 btnRaise.onclick = () => {
   clearAllErr();
   if (!state?.hand) return;
@@ -201,7 +192,7 @@ btnRaise.onclick = () => {
   }
 
   socket.emit("raise", { newBet });
-  raiseInput.value = ""; // clear after raise
+  raiseInput.value = "";
 };
 
 function quickRaise(amount) {
@@ -220,7 +211,6 @@ q1000.onclick = () => quickRaise(1000);
 q1500.onclick = () => quickRaise(1500);
 q2000.onclick = () => quickRaise(2000);
 
-// Winner: host only, choose seat number (1-10)
 btnWin.onclick = () => {
   clearAllErr();
   if (!state || !isHost(state)) return;
@@ -235,12 +225,14 @@ btnWin.onclick = () => {
   socket.emit("declareWinner", { winnerSeat: n - 1 });
 };
 
-backToLobbyBtn.onclick = () => {
-  if (!state) return;
-  renderScreens(state, { forceLobby: true });
-};
+if (backToLobbyBtn) {
+  backToLobbyBtn.onclick = () => {
+    if (!state) return;
+    renderScreens(state, { forceLobby: true });
+  };
+}
 
-// ---------- Socket events ----------
+// Socket events
 socket.on("me", ({ seatIndex, playerId }) => {
   mySeatIndex = seatIndex;
   myPlayerId = playerId;
@@ -282,7 +274,7 @@ socket.on("state", (st) => {
   renderScreens(st);
 });
 
-// ---------- Rendering ----------
+// Rendering
 function resetToEntry() {
   state = null;
   mySeatIndex = null;
@@ -290,7 +282,7 @@ function resetToEntry() {
 
   show(screenEntry);
   hide(screenLobby);
-  hide(screenGameGrid);
+  hide(screenGame);
   hide(bottomBar);
 
   pillTable.textContent = "Table: -";
@@ -306,7 +298,7 @@ function renderScreens(st, opts = {}) {
   if (!inGame(st) || forceLobby) {
     hide(screenEntry);
     show(screenLobby);
-    hide(screenGameGrid);
+    hide(screenGame);
     hide(bottomBar);
     renderLobby(st);
     return;
@@ -314,7 +306,7 @@ function renderScreens(st, opts = {}) {
 
   hide(screenEntry);
   hide(screenLobby);
-  show(screenGameGrid);
+  show(screenGame);
   show(bottomBar);
   renderGame(st);
 }
@@ -322,7 +314,6 @@ function renderScreens(st, opts = {}) {
 function renderLobby(st) {
   lobbySeats.innerHTML = "";
 
-  // ONLY occupied users (no empty)
   const occ = st.seats.filter((s) => s.occupied);
 
   if (!occ.length) {
@@ -362,35 +353,24 @@ function renderGame(st) {
 
   // Center info
   potText.textContent = `Current: ${fmt(hand.currentBet ?? 0)}`;
-  const aliveCount = st.seats.filter((s) => s.occupied).length;
   const pot = hand.pot ?? 0;
-  handMeta.textContent = `Pot: ${fmt(pot)} | Players: ${aliveCount}`;
+  const activePlayers = st.seats.filter((s) => s.occupied).length;
+  handMeta.textContent = `Pot: ${fmt(pot)} | Players: ${activePlayers}`;
 
   // Winner button only for host
   if (isHost(st)) show(btnWin);
   else hide(btnWin);
 
-  // Seats: ONLY occupied, positioned dynamically around ellipse
+  // Seats: ONLY occupied, fixed portrait positions by seat index
   seatLayer.innerHTML = "";
-  const occ = st.seats.filter((s) => s.occupied);
 
-  const n = occ.length;
-  const radiusX = 42; // %
-  const radiusY = 34; // %
-  const startDeg = -90; // top
+  for (const s of st.seats) {
+    if (!s.occupied) continue;
 
-  for (let k = 0; k < n; k++) {
-    const s = occ[k];
     const seatIndex = s.seat;
 
-    const angle = ((startDeg + (360 * k) / n) * Math.PI) / 180;
-    const left = 50 + radiusX * Math.cos(angle);
-    const top = 50 + radiusY * Math.sin(angle);
-
     const seatDiv = document.createElement("div");
-    seatDiv.className = "seat";
-    seatDiv.style.left = `${left}%`;
-    seatDiv.style.top = `${top}%`;
+    seatDiv.className = `seat p${seatIndex}`;
 
     const isDealer = hand.dealerSeat === seatIndex;
     const isTurn = hand.turnSeat === seatIndex;
@@ -406,7 +386,6 @@ function renderGame(st) {
     if (isDealer) badges.push(`<span class="badge dealer">D</span>`);
     if (isTurn) badges.push(`<span class="badge turn">T</span>`);
 
-    // Per-player bet (this hand)
     const contributed = hand.contributed?.[seatIndex] ?? 0;
 
     seatDiv.innerHTML = `
@@ -420,7 +399,7 @@ function renderGame(st) {
     seatLayer.appendChild(seatDiv);
   }
 
-  // Turn / action status
+  // Turn / action status + MY TURN UX
   const myInHand = hand.inHand?.[mySeatIndex] === true;
   const myTurn = hand.turnSeat === mySeatIndex && myInHand;
 
@@ -434,16 +413,17 @@ function renderGame(st) {
     )} | Current: ${fmt(currentBet)}`;
     show(turnBanner);
     actionStatus.textContent = `Таны ээлж — Call ${fmt(callNeed)}`;
+    bottomBar.classList.add("myTurn");
   } else {
     hide(turnBanner);
     actionStatus.textContent = `Хүлээж байна… TURN: Seat ${hand.turnSeat + 1}`;
+    bottomBar.classList.remove("myTurn");
   }
 
   btnCall.disabled = !myTurn;
   btnFold.disabled = !myTurn;
   btnRaise.disabled = !myTurn;
 
-  // quick buttons only on your turn
   q500.disabled = !myTurn;
   q1000.disabled = !myTurn;
   q1500.disabled = !myTurn;
@@ -451,36 +431,40 @@ function renderGame(st) {
 
   btnCall.textContent = callNeed > 0 ? `Call ${fmt(callNeed)}` : "Call";
 
-  // Ledger
-  ledgerList.innerHTML = "";
-  for (const p of st.ledger) {
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.justifyContent = "space-between";
-    row.style.padding = "10px 0";
-    row.style.borderBottom = "1px solid rgba(255,255,255,0.10)";
-    const sign = p.net >= 0 ? "+" : "";
-    row.innerHTML = `<div style="font-weight:900;">${esc(
-      p.name
-    )}</div><div style="font-weight:950;">${sign}${fmt(p.net)}</div>`;
-    ledgerList.appendChild(row);
+  // Ledger (optional area)
+  if (ledgerList) {
+    ledgerList.innerHTML = "";
+    for (const p of st.ledger) {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.padding = "10px 0";
+      row.style.borderBottom = "1px solid rgba(255,255,255,0.10)";
+      const sign = p.net >= 0 ? "+" : "";
+      row.innerHTML = `<div style="font-weight:900;">${esc(
+        p.name
+      )}</div><div style="font-weight:950;">${sign}${fmt(p.net)}</div>`;
+      ledgerList.appendChild(row);
+    }
   }
 
-  // History
-  historyDiv.innerHTML = "";
-  const hist = hand.history?.slice().reverse() || [];
-  for (const h of hist.slice(0, 50)) {
-    const t = new Date(h.ts).toLocaleString();
-    const parts = [];
-    parts.push(`[${t}]`);
-    parts.push(esc(h.type));
-    if (h.by) parts.push(`— <b>${esc(h.by)}</b>`);
-    if (h.amount != null) parts.push(`(${fmt(h.amount)})`);
-    if (h.newBet != null) parts.push(`→ ${fmt(h.newBet)}`);
-    if (h.note) parts.push(`— ${esc(h.note)}`);
-    const line = document.createElement("div");
-    line.innerHTML = parts.join(" ");
-    historyDiv.appendChild(line);
+  // History (optional area)
+  if (historyDiv) {
+    historyDiv.innerHTML = "";
+    const hist = hand.history?.slice().reverse() || [];
+    for (const h of hist.slice(0, 50)) {
+      const t = new Date(h.ts).toLocaleString();
+      const parts = [];
+      parts.push(`[${t}]`);
+      parts.push(esc(h.type));
+      if (h.by) parts.push(`— <b>${esc(h.by)}</b>`);
+      if (h.amount != null) parts.push(`(${fmt(h.amount)})`);
+      if (h.newBet != null) parts.push(`→ ${fmt(h.newBet)}`);
+      if (h.note) parts.push(`— ${esc(h.note)}`);
+      const line = document.createElement("div");
+      line.innerHTML = parts.join(" ");
+      historyDiv.appendChild(line);
+    }
   }
 
   setErr(lobbyErr, "");
