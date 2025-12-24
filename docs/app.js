@@ -1,3 +1,8 @@
+// docs/app.js
+const socket = io(window.SOCKET_URL, {
+  transports: ["websocket", "polling"]
+});
+
 socket.on("connect", () => console.log("socket connected", socket.id));
 socket.on("connect_error", (e) => console.log("connect_error", e?.message || e));
 socket.on("disconnect", (r) => console.log("disconnected", r));
@@ -416,5 +421,6 @@ function renderGame(st) {
 
 // Start
 resetToEntry();
+
 
 
