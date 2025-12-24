@@ -10,7 +10,6 @@
     <style>
       :root {
         --bg: #0b0f14;
-        --card: rgba(255, 255, 255, 0.06);
         --text: rgba(255, 255, 255, 0.92);
         --muted: rgba(255, 255, 255, 0.65);
         --line: rgba(255, 255, 255, 0.1);
@@ -48,7 +47,7 @@
       .wrap {
         max-width: 980px;
         margin: 0 auto;
-        padding: 16px 14px 120px;
+        padding: 16px 14px 150px; /* bottom bar space */
       }
 
       .topbar {
@@ -238,10 +237,12 @@
         background: rgba(98, 160, 234, 0.1);
       }
 
+      /* --- TABLE (portrait, bigger) --- */
       .tableWrap {
         position: relative;
         width: 100%;
-        aspect-ratio: 16/10;
+        aspect-ratio: 10/16; /* босоо */
+        max-height: 72vh; /* утсан дээр том */
         border-radius: 26px;
         border: 1px solid var(--line);
         background: radial-gradient(
@@ -281,18 +282,15 @@
         border-radius: 16px;
         border: 1px solid rgba(255, 255, 255, 0.12);
         background: rgba(0, 0, 0, 0.22);
-        min-width: 210px;
+        min-width: 200px;
       }
       .centerInfo .pot {
         font-size: 18px;
         font-weight: 950;
       }
       .centerInfo .meta {
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 4px;
-        line-height: 1.35;
-      }
+        display: none;
+      } /* pot/hand/base байхгүй, зөвхөн current */
 
       .turnBanner {
         margin-top: 10px;
@@ -303,34 +301,33 @@
         font-weight: 950;
       }
 
+      /* Seat: compact (only name + seat# + badges) */
       .seat {
         position: absolute;
-        width: 34%;
-        max-width: 210px;
-        min-width: 118px;
+        width: 44%;
+        max-width: 170px;
+        min-width: 98px;
         border-radius: 16px;
         border: 1px solid var(--line);
         background: rgba(0, 0, 0, 0.22);
-        padding: 10px;
+        padding: 8px 10px;
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
         transform: translate(-50%, -50%);
       }
       @media (max-width: 420px) {
         .seat {
-          width: 38%;
-          min-width: 104px;
-          padding: 8px;
+          width: 48%;
+          min-width: 92px;
+          padding: 7px 9px;
         }
         .seat .name {
           font-size: 12px;
         }
-        .seat .line2 {
-          font-size: 11px;
-        }
         .centerInfo {
-          min-width: 190px;
+          min-width: 180px;
         }
       }
+
       .seat.me {
         border-color: rgba(98, 160, 234, 0.45);
         background: rgba(98, 160, 234, 0.1);
@@ -352,14 +349,7 @@
         align-items: center;
         gap: 8px;
         flex-wrap: wrap;
-      }
-      .seat .line2 {
-        margin-top: 4px;
-        font-size: 12px;
-        color: var(--muted);
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
+        line-height: 1.15;
       }
 
       .badge {
@@ -384,45 +374,45 @@
         background: rgba(51, 209, 122, 0.12);
       }
 
-      /* 10 positions */
+      /* Portrait seat positions (10) */
       .p0 {
         left: 50%;
-        top: 8%;
+        top: 6%;
       }
       .p1 {
-        left: 78%;
+        left: 76%;
         top: 14%;
       }
       .p2 {
-        left: 92%;
-        top: 32%;
+        left: 90%;
+        top: 28%;
       }
       .p3 {
-        left: 92%;
-        top: 60%;
+        left: 90%;
+        top: 46%;
       }
       .p4 {
-        left: 78%;
-        top: 80%;
+        left: 76%;
+        top: 62%;
       }
       .p5 {
         left: 50%;
-        top: 90%;
+        top: 76%;
       }
       .p6 {
-        left: 22%;
-        top: 80%;
+        left: 24%;
+        top: 62%;
       }
       .p7 {
-        left: 8%;
-        top: 60%;
+        left: 10%;
+        top: 46%;
       }
       .p8 {
-        left: 8%;
-        top: 32%;
+        left: 10%;
+        top: 28%;
       }
       .p9 {
-        left: 22%;
+        left: 24%;
         top: 14%;
       }
 
@@ -540,10 +530,8 @@
             <div class="felt"></div>
 
             <div class="centerInfo">
-              <div class="pot" id="potText">Pot: 0</div>
-              <div class="meta" id="handMeta">
-                Hand: - | Base: - | Current: -
-              </div>
+              <div class="pot" id="potText">Current: 0</div>
+              <div class="meta" id="handMeta"></div>
             </div>
 
             <div id="seatLayer"></div>
@@ -603,6 +591,21 @@
           />
           <button class="btn-yellow" id="btnRaise" style="flex: 0 0 auto">
             Raise
+          </button>
+        </div>
+
+        <div class="raiseBox" style="flex: 2 1 260px">
+          <button id="q500" class="btn-yellow" style="flex: 1 1 70px">
+            500
+          </button>
+          <button id="q1000" class="btn-yellow" style="flex: 1 1 80px">
+            1,000
+          </button>
+          <button id="q1500" class="btn-yellow" style="flex: 1 1 80px">
+            1,500
+          </button>
+          <button id="q2000" class="btn-yellow" style="flex: 1 1 80px">
+            2,000
           </button>
         </div>
 

@@ -1,11 +1,5 @@
 // docs/app.js
-const socket = io(window.SOCKET_URL, {
-  transports: ["websocket", "polling"]
-});
-
-socket.on("connect", () => console.log("socket connected", socket.id));
-socket.on("connect_error", (e) => console.log("connect_error", e?.message || e));
-socket.on("disconnect", (r) => console.log("disconnected", r));
+const socket = io(window.SOCKET_URL, { transports: ["websocket", "polling"] });
 
 // Screens
 const screenEntry = document.getElementById("screenEntry");
@@ -46,6 +40,12 @@ const btnFold = document.getElementById("btnFold");
 const btnWin = document.getElementById("btnWin");
 const raiseInput = document.getElementById("raiseInput");
 
+// Quick raise
+const q500 = document.getElementById("q500");
+const q1000 = document.getElementById("q1000");
+const q1500 = document.getElementById("q1500");
+const q2000 = document.getElementById("q2000");
+
 const settleBtn = document.getElementById("settleBtn");
 const backToLobbyBtn = document.getElementById("backToLobbyBtn");
 
@@ -74,7 +74,7 @@ function esc(s) {
 function fmt(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return String(n);
-  return x.toLocaleString("en-US"); // 1,000 style
+  return x.toLocaleString("en-US");
 }
 function setErr(el, msg) {
   if (!msg) {
@@ -159,12 +159,24 @@ btnFold.onclick = () => {
   clearAllErr();
   socket.emit("fold");
 };
+
 btnRaise.onclick = () => {
   clearAllErr();
   const digits = raiseInput.value.replace(/[^\d]/g, "");
   const newBet = Number(digits);
   socket.emit("raise", { newBet });
+  raiseInput.value = ""; // clear after raise
 };
+
+function quickRaise(amount) {
+  clearAllErr();
+  socket.emit("raise", { newBet: amount });
+  raiseInput.value = "";
+}
+q500.onclick = () => quickRaise(500);
+q1000.onclick = () => quickRaise(1000);
+q1500.onclick = () => quickRaise(1500);
+q2000.onclick = () => quickRaise(2000);
 
 // Winner: host only, choose seat number (1-10)
 btnWin.onclick = () => {
@@ -199,7 +211,6 @@ socket.on("errorMsg", ({ message }) => {
 });
 
 socket.on("handFinished", ({ lastHand }) => {
-  // After finish server resets to lobby
   if (lastHand?.pot != null) {
     setErr(
       lobbyErr,
@@ -305,16 +316,15 @@ function renderLobby(st) {
 function renderGame(st) {
   const hand = st.hand;
 
-  potText.textContent = `Pot: ${fmt(hand.pot)}`;
-  handMeta.textContent = `Hand: ${hand.id} | Base: ${fmt(
-    hand.baseBet
-  )} | Current: ${fmt(hand.currentBet)}`;
+  // center: only CURRENT
+  potText.textContent = `Current: ${fmt(hand.currentBet)}`;
+  handMeta.textContent = "";
 
   // Winner button only for host
   if (isHost(st)) show(btnWin);
   else hide(btnWin);
 
-  // Seats
+  // Seats (compact)
   seatLayer.innerHTML = "";
   for (const s of st.seats) {
     const seatIndex = s.seat;
@@ -324,8 +334,7 @@ function renderGame(st) {
     if (!s.occupied) {
       seatDiv.innerHTML = `<div class="name">Empty <span class="badge">${
         seatIndex + 1
-      }</span></div>
-                           <div class="line2"><span>Contrib</span><span>—</span></div>`;
+      }</span></div>`;
       seatLayer.appendChild(seatDiv);
       continue;
     }
@@ -344,14 +353,8 @@ function renderGame(st) {
     if (isDealer) badges.push(`<span class="badge dealer">D</span>`);
     if (isTurn) badges.push(`<span class="badge turn">T</span>`);
 
-    const contrib = hand.contributed?.[seatIndex] ?? 0;
-
     seatDiv.innerHTML = `
       <div class="name">${esc(s.name)} ${badges.join("")}</div>
-      <div class="line2">
-        <span>Contrib</span>
-        <span>${fmt(contrib)}</span>
-      </div>
     `;
     seatLayer.appendChild(seatDiv);
   }
@@ -378,6 +381,12 @@ function renderGame(st) {
   btnCall.disabled = !myTurn;
   btnFold.disabled = !myTurn;
   btnRaise.disabled = !myTurn;
+
+  // quick buttons only on your turn
+  q500.disabled = !myTurn;
+  q1000.disabled = !myTurn;
+  q1500.disabled = !myTurn;
+  q2000.disabled = !myTurn;
 
   btnCall.textContent = callNeed > 0 ? `Call ${fmt(callNeed)}` : "Call";
 
@@ -418,7 +427,3 @@ function renderGame(st) {
 
 // Start
 resetToEntry();
-
-
-
-
